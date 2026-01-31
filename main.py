@@ -1,22 +1,24 @@
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, Depends, HTTPException, Header
 from pydantic import BaseModel
 from detector import analyze_message
 
 app = FastAPI()
-security = HTTPBearer()
 
-API_KEY = "mysecretkey123"   # change later if you want
+API_KEY = "mysecretkey123"  # same key you enter in GUVI tester
 
 class MessageRequest(BaseModel):
     message: str
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if credentials.credentials != API_KEY:
+# ✅ GUVI-compatible authentication
+def verify_api_key(x_api_key: str = Header(None)):
+    if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 @app.post("/analyze")
-def analyze(data: MessageRequest, token: str = Depends(verify_token)):
+def analyze(
+    data: MessageRequest,
+    api_key: str = Depends(verify_api_key)
+):
     if not data.message.strip():
         raise HTTPException(status_code=400, detail="Empty message")
 
