@@ -13,13 +13,21 @@ def analyze_message(message: str):
     confidence = 0.4
     explanation = "No strong scam indicators detected."
 
-    # Lottery scam
-    if any(word in text for word in ["lottery", "won", "winner", "prize"]):
+    # Sensitive data request keywords (NEW)
+    sensitive_data_words = [
+        "upi", "bank", "account", "otp",
+        "id proof", "aadhar", "pan",
+        "address", "contact details", "contact",
+        "gmail", "email"
+    ]
+
+    # Lottery / prize scam
+    if any(word in text for word in ["lottery", "won", "winner", "prize", "win"]):
         scam_type = "lottery_fraud"
         keywords.extend(["lottery", "winning"])
         risk = "high"
         confidence = 0.9
-        explanation = "Message promises a prize or lottery winnings, a common scam pattern."
+        explanation = "Message promises a prize or winnings, a common scam pattern."
 
     # Job scam
     elif any(word in text for word in ["job offer", "work from home", "salary", "hiring"]):
@@ -37,6 +45,13 @@ def analyze_message(message: str):
         confidence = 0.75
         explanation = "Message talks about instant or guaranteed loans, common in financial fraud."
 
+    # Sensitive information request increases risk (NEW FIX)
+    if any(word in text for word in sensitive_data_words):
+        risk = "high"
+        keywords.append("personal_data_request")
+        confidence = min(confidence + 0.2, 0.95)
+        explanation = "Message requests sensitive personal information, a strong scam indicator."
+
     # Urgency increases risk
     if any(word in text for word in ["urgent", "immediately", "act now"]):
         risk = "high"
@@ -47,9 +62,18 @@ def analyze_message(message: str):
     if phone_numbers or urls or emails:
         confidence = min(confidence + 0.1, 0.95)
 
+    # Agentic recommended action
+    if risk == "high":
+        recommended_action = "report"
+    elif risk == "medium":
+        recommended_action = "monitor"
+    else:
+        recommended_action = "ignore"
+
     return {
         "scam_type": scam_type,
         "risk_level": risk,
+        "recommended_action": recommended_action,
         "indicators": {
             "phone_numbers": phone_numbers,
             "urls": urls,
