@@ -9,18 +9,18 @@ API_KEY = "mysecretkey123"
 class MessageRequest(BaseModel):
     message: str
 
-# ✅ GUVI Honeypot Tester endpoint (POST, NO BODY REQUIRED)
-@app.post("/")
+# ✅ UNIVERSAL tester endpoint (GET + POST, NO BODY)
+@app.api_route("/", methods=["GET", "POST"], include_in_schema=False)
 def tester_endpoint(x_api_key: str = Header(None)):
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     return {
         "status": "ok",
-        "message": "Honeypot API validated successfully"
+        "message": "Honeypot API is live and accessible"
     }
 
-# ✅ Real evaluation endpoint (POST with body)
+# ✅ REAL evaluation endpoint (POST + BODY)
 @app.post("/analyze")
 def analyze(data: MessageRequest, x_api_key: str = Header(None)):
     if x_api_key != API_KEY:
