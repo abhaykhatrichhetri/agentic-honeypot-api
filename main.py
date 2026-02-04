@@ -1,37 +1,49 @@
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.security import APIKeyHeader
+from fastapi import FastAPI, Depends, HTTPException, Header
 from pydantic import BaseModel
 from detector import analyze_message
 
 app = FastAPI()
 
-# API key setup (matches tester)
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 API_KEY = "mysecretkey123"
 
-class MessageRequest(BaseModel):
-    message: str | None = None
 
-def verify_api_key(api_key: str = Depends(api_key_header)):
-    if api_key != API_KEY:
+# ---------- AUTH ----------
+def verify_key(x_api_key: str = Header(...)):
+    if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-#  ROOT endpoint → tester ping
+
+# ---------- MODELS ----------
+class IncomingMessage(BaseModel):
+    sessionId: str
+    message: dict
+    conversationHistory: list = []
+    metadata: dict = {}
+
+
+class AnalyzeRequest(BaseModel):
+    message: str
+
+
+# ---------- ROOT HONEYPOT ENDPOINT ----------
 @app.post("/")
-def root(token: str = Depends(verify_api_key)):
+def honeypot_root(data: IncomingMessage, auth=Depends(verify_key)):
+    scam_text = data.message.get("text", "")
+
+    result = analyze_message(scam_text)
+
+    reply = "Why is my account being suspended?"
+
+    if result["risk_level"] == "high":
+        reply = "I am worried. What should I do now?"
+
     return {
-        "status": "ok",
-        "message": "Honeypot API is live and accessible"
+        "status": "success",
+        "reply": reply
     }
 
-#  ANALYZE endpoint → real evaluation
-@app.post("/analyze")
-def analyze(data: MessageRequest, token: str = Depends(verify_api_key)):
-    if not data.message:
-        # tester sends no body → respond safely
-        return {
-            "status": "ok",
-            "note": "Endpoint reachable. No message provided."
-        }
 
+# ---------- ANALYZE ENDPOINT ----------
+@app.post("/analyze")
+def analyze_api(data: AnalyzeRequest, auth=Depends(verify_key)):
     return analyze_message(data.message)
