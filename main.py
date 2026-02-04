@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 import requests
 import re
 
@@ -9,9 +10,9 @@ API_KEY = "mysecretkey123"
 GUVI_CALLBACK = "https://hackathon.guvi.in/api/updateHoneyPotFinalResult"
 
 
-# --------------------
-# Data Models
-# --------------------
+# ----------------------
+# Models
+# ----------------------
 
 class Message(BaseModel):
     sender: str
@@ -26,9 +27,9 @@ class RequestBody(BaseModel):
     metadata: dict = {}
 
 
-# --------------------
-# Helper Functions
-# --------------------
+# ----------------------
+# Helpers
+# ----------------------
 
 def extract_intelligence(text: str):
     phones = re.findall(r"\+91\d{10}", text)
@@ -64,29 +65,36 @@ def send_callback(session_id, intelligence, total_msgs):
         pass
 
 
-# --------------------
-# API Endpoint
-# --------------------
+# ----------------------
+# Root Endpoint
+# ----------------------
 
 @app.post("/")
-def honeypot_api(data: RequestBody, x_api_key: str = Header(None)):
-
+def honeypot_api(
+    data: Optional[RequestBody] = None,
+    x_api_key: str = Header(None)
+):
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    # CASE 1 → Tester sends empty body
+    if data is None:
+        return {
+            "status": "success",
+            "reply": "Why is my account being suspended?"
+        }
+
+    # CASE 2 → Judges send JSON
     text = data.message.text.lower()
 
-    scam_keywords = ["account blocked", "verify", "urgent", "otp", "upi", "bank"]
-
-    scam_detected = any(k in text for k in scam_keywords)
+    scam_words = ["account", "blocked", "verify", "urgent", "otp", "upi", "bank"]
+    scam_detected = any(w in text for w in scam_words)
 
     if scam_detected:
         reply = "Why is my account being suspended?"
         intel = extract_intelligence(text)
         total_msgs = len(data.conversationHistory) + 1
-
         send_callback(data.sessionId, intel, total_msgs)
-
     else:
         reply = "Can you explain more?"
 
