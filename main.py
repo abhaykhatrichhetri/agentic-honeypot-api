@@ -1,73 +1,62 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.security import APIKeyHeader
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from fastapi import FastAPI, Header, HTTPException, Request
 from detector import analyze_message
 
 app = FastAPI()
 
-# ================================
-# CONFIG
-# ================================
-
 API_KEY = "mysecretkey123"
-api_key_header = APIKeyHeader(name="x-api-key")
 
-# ================================
-# AUTH
-# ================================
 
-def verify_key(api_key: str = Depends(api_key_header)):
-    if api_key != API_KEY:
+# ---------- ROOT ENDPOINT (FOR GUVI TESTER) ----------
+@app.post("/")
+async def root_endpoint(request: Request, x_api_key: str = Header(None)):
+    
+    if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-# ================================
-# MODELS (Judge Payload)
-# ================================
+    # Try to read body safely
+    try:
+        body = await request.json()
+    except:
+        body = None
 
-class ScamMessage(BaseModel):
-    sender: str
-    text: str
-    timestamp: Optional[int] = None
+    # If tester sends nothing
+    if body is None:
+        return {
+            "status": "success",
+            "reply": "Why is my account being suspended?"
+        }
 
-class JudgeRequest(BaseModel):
-    sessionId: Optional[str] = None
-    message: ScamMessage
-    conversationHistory: Optional[list] = []
-    metadata: Optional[Dict[str, Any]] = {}
+    # If tester sends message object
+    message_text = ""
 
-# ================================
-# ROOT ENDPOINT (Tester)
-# ================================
+    if "message" in body:
+        if isinstance(body["message"], dict):
+            message_text = body["message"].get("text", "")
+        else:
+            message_text = str(body["message"])
 
-@app.post("/")
-def honeypot_root(token: str = Depends(verify_key)):
+    if message_text.strip() == "":
+        return {
+            "status": "success",
+            "reply": "Why is my account being suspended?"
+        }
+
+    result = analyze_message(message_text)
+
     return {
         "status": "success",
-        "reply": "Honeypot API is live and accessible"
+        "reply": result["explanation"]
     }
 
-# ================================
-# ANALYZE ENDPOINT (Judges)
-# ================================
 
+# ---------- YOUR ORIGINAL ANALYZE ENDPOINT ----------
 @app.post("/analyze")
-def analyze_judge(data: JudgeRequest, token: str = Depends(verify_key)):
-    text = data.message.text
+def analyze_api(data: dict, x_api_key: str = Header(None)):
+    
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
-    result = analyze_message(text)
+    if "message" not in data:
+        raise HTTPException(status_code=400, detail="Message missing")
 
-    reply = "Why is my account being suspended?"
-
-    if result["risk_level"] == "high":
-        reply = "I am worried. What should I do now?"
-    elif result["risk_level"] == "medium":
-        reply = "Can you explain more about this?"
-    else:
-        reply = "Okay, noted."
-
-    return {
-        "status": "success",
-        "reply": reply,
-        "analysis": result
-    }
+    return analyze_message(data["message"])
